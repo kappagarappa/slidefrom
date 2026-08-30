@@ -1,0 +1,12 @@
+{
+  "name": "slidev-theme-slidefrom",
+  "version": "0.0.0",
+  "private": true,
+  "keywords": [
+    "slidev-theme",
+    "slidev"
+  ],
+  "slidev": {
+    "colorSchema": "light"
+  }
+}

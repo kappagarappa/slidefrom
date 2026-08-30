@@ -1,0 +1,5 @@
+.DS_Store
+node_modules/
+/dist/
+*.slidev.md
+*.slidev.map.json
