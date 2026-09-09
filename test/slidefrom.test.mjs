@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { promisify } from 'node:util'
+import { fileURLToPath } from 'node:url'
 import { compile, parseMarkdown, planSlides, renderDeck, runCli } from '../src/slidefrom.mjs'
 
 const execFileAsync = promisify(execFile)
@@ -143,4 +144,10 @@ console.log(JSON.stringify(launched))
     assert.equal(launched.outputPath, expectedOutput)
     assert.deepEqual(launched.options, { open: true })
   }
+})
+
+test('CLIヘルプはglobの実行条件と一致する', async () => {
+  const result = await execFileAsync(process.execPath, [fileURLToPath(new URL('../src/slidefrom.mjs', import.meta.url)), '--help'])
+  assert.match(result.stdout, /候補が1ファイルならそのファイルを実行し/)
+  assert.doesNotMatch(result.stdout, /引用符で囲み/)
 })

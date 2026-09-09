@@ -303,7 +303,7 @@ async function embedLocalImages(slides, inputPath) {
 }
 
 function usage() {
-  return `使い方: slidefrom <input.md> [-o output.slidev.md] [--open]\n\n指定したMarkdownを組版し、Slidevで表示します。再帰globを使う場合は引用符で囲み、候補を1ファイルに絞ってください。`
+  return `使い方: slidefrom <input.md> [-o output.slidev.md] [--open]\n\n指定したMarkdownを組版し、Slidevで表示します。候補が1ファイルならそのファイルを実行し、候補がない場合は再帰的に探します。生成済みの *.slidev.md は入力候補から除外します。`
 }
 
 export function startSlidev(outputPath, options = {}) {
