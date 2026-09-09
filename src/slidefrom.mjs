@@ -329,9 +329,11 @@ export async function runCli(argv, launch = startSlidev) {
     else if (argv[i].startsWith('-')) throw new Error(`不明なオプションです: ${argv[i]}`)
     else inputs.push(argv[i])
   }
-  const sourceInputs = inputs.filter(input => !/\.slidev\.md$/i.test(input))
-  const candidates = sourceInputs.length ? sourceInputs : inputs
-  if (!candidates.length) throw new Error('入力Markdownが指定されていません。\n' + usage())
+  const candidates = inputs.filter(input => !/\.slidev\.md$/i.test(input))
+  if (!candidates.length) {
+    const message = inputs.length ? '入力Markdownが見つかりません。生成済みの *.slidev.md は入力できません。' : '入力Markdownが指定されていません。\n' + usage()
+    throw new Error(message)
+  }
   if (candidates.length > 1) throw new Error(`入力は1ファイルだけ指定できます: ${candidates[1]}`)
   if ((argv.includes('-o') || argv.includes('--output')) && !output) throw new Error('出力先が指定されていません。')
   const input = await resolveInput(candidates[0])

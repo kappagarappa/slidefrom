@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -144,6 +144,9 @@ console.log(JSON.stringify(launched))
     assert.equal(launched.outputPath, expectedOutput)
     assert.deepEqual(launched.options, { open: true })
   }
+  await unlink(join(directory, 'target.md'))
+  await assert.rejects(execFileAsync('bash', ['-c', command], { cwd: directory }), /生成済みの \*\.slidev\.md は入力できません/)
+  await assert.rejects(readFile(join(directory, 'target.slidev.slidev.md')))
 })
 
 test('CLIヘルプはglobの実行条件と一致する', async () => {
