@@ -149,6 +149,22 @@ test('CLIはglobの否定文字クラスを解決する', async () => {
   assert.equal(launched, join(directory, 'b.slidev.md'))
 })
 
+test('CLIは否定文字クラスでパス区切りを跨がない', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'slidefrom-glob-separator-'))
+  await mkdir(join(directory, 'foo'))
+  await writeFile(join(directory, 'foo', 'bar.md'), '# Bar')
+  await assert.rejects(runCli([join(directory, 'foo[!a]*.md')], async () => {}), /Markdownファイルが見つかりません/)
+})
+
+test('CLIは閉じていない角括弧をファイル名として扱う', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'slidefrom-literal-bracket-'))
+  const input = join(directory, 'report[.md')
+  await writeFile(input, '# Report')
+  let launched
+  await runCli([input], async outputPath => { launched = outputPath })
+  assert.equal(launched, join(directory, 'report[.slidev.md'))
+})
+
 test('CLIはbashの先行展開後も指定出力と同じglobを連続実行できる', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'slidefrom-bash-glob-'))
   await writeFile(join(directory, 'target.md'), '# 対象')

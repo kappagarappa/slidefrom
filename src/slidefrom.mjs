@@ -381,12 +381,12 @@ function globRegExp(pattern) {
     if (pattern[i] === '[') {
       const end = pattern.indexOf(']', i + 1)
       if (end > i + 1) {
-        source += pattern[i + 1] === '!' ? `[^${pattern.slice(i + 2, end + 1)}` : pattern.slice(i, end + 1)
+        source += pattern[i + 1] === '!' ? `[^/${pattern.slice(i + 2, end + 1)}` : pattern.slice(i, end + 1)
         i = end + 1
         continue
       }
     }
-    source += pattern[i].replace(/[\\^$+?.()|{}]/g, '\\$&')
+    source += pattern[i].replace(/[\\^$+?.()[\]{}|]/g, '\\$&')
     i++
   }
   return new RegExp(`${source}$`)
