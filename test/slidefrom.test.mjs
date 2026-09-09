@@ -138,6 +138,17 @@ test('CLIはglobの複数候補を勝手に選ばない', async () => {
   await assert.rejects(runCli([join(directory, '**.md')], async () => {}), /Markdownファイルが複数見つかりました/)
 })
 
+test('CLIはglobの否定文字クラスを解決する', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'slidefrom-glob-negated-class-'))
+  const input = join(directory, '[!a].md')
+  await writeFile(join(directory, 'a.md'), '# A')
+  await assert.rejects(runCli([input], async () => {}), /Markdownファイルが見つかりません/)
+  await writeFile(join(directory, 'b.md'), '# B')
+  let launched
+  await runCli([input], async outputPath => { launched = outputPath })
+  assert.equal(launched, join(directory, 'b.slidev.md'))
+})
+
 test('CLIはbashの先行展開後も指定出力と同じglobを連続実行できる', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'slidefrom-bash-glob-'))
   await writeFile(join(directory, 'target.md'), '# 対象')
