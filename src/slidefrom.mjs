@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
-import { readdir, readFile, writeFile } from 'node:fs/promises'
+import { readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { dirname, extname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { loadDefaultJapaneseParser } from 'budoux'
@@ -348,6 +348,9 @@ export async function runCli(argv, launch = startSlidev) {
 
 async function resolveInput(input, output) {
   if (!/[?*[]/.test(input)) return input
+  try {
+    if ((await stat(input)).isFile()) return input
+  } catch {}
   const matches = (await expandGlob(input)).filter(path => !isExcludedInput(path, output))
   if (!matches.length) throw new Error(`${input}: Markdownファイルが見つかりません。パスを確認してください。`)
   if (matches.length > 1) {
@@ -383,7 +386,7 @@ function globRegExp(pattern) {
       const end = pattern.indexOf(']', i + 1)
       if (end > i + 1) {
         const negated = pattern[i + 1] === '!' || pattern[i + 1] === '^'
-        source += segmentStart && negated ? '(?!\\.)' : ''
+        source += segmentStart ? '(?!\\.)' : ''
         source += negated ? `[^/${pattern.slice(i + 2, end + 1)}` : pattern.slice(i, end + 1)
         i = end + 1
         continue

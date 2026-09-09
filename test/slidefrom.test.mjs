@@ -169,6 +169,12 @@ test('CLIはglobのセグメント先頭でドットファイルを選ばない'
   await assert.rejects(runCli([join(directory, '**.md')], async () => {}), /Markdownファイルが見つかりません/)
 })
 
+test('CLIはglobの正文字クラスもドットファイルを選ばない', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'slidefrom-glob-positive-class-'))
+  await writeFile(join(directory, '.secret.md'), '# Secret')
+  await assert.rejects(runCli([join(directory, '[.]*.md')], async () => {}), /Markdownファイルが見つかりません/)
+})
+
 test('CLIはキャレット否定文字クラスでパス区切りを跨がない', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'slidefrom-glob-caret-'))
   await mkdir(join(directory, 'foo'))
@@ -183,6 +189,15 @@ test('CLIは閉じていない角括弧をファイル名として扱う', async
   let launched
   await runCli([input], async outputPath => { launched = outputPath })
   assert.equal(launched, join(directory, 'report[.slidev.md'))
+})
+
+test('CLIはglob記号を含む実在パスを優先する', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'slidefrom-literal-glob-'))
+  const input = join(directory, 'report[1].md')
+  await writeFile(input, '# Report')
+  let launched
+  await runCli([input], async outputPath => { launched = outputPath })
+  assert.equal(launched, join(directory, 'report[1].slidev.md'))
 })
 
 test('CLIはbashの先行展開後も指定出力と同じglobを連続実行できる', async () => {
