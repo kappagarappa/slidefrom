@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { compile, parseMarkdown, planSlides, renderDeck } from '../src/slidefrom.mjs'
+import { compile, parseMarkdown, planSlides, renderDeck, runCli } from '../src/slidefrom.mjs'
 
 const markdown = `# 表紙
 
@@ -95,7 +95,6 @@ test('ローカル画像をSlidevの表示とビルドで使える形にする',
 })
 
 test('CLIは指定したMarkdownだけを変換してSlidevへ渡す', async () => {
-  const { runCli } = await import('../src/slidefrom.mjs')
   const directory = await mkdtemp(join(tmpdir(), 'slidefrom-cli-'))
   const input = join(directory, 'target.md')
   await writeFile(input, '# 対象')
@@ -104,4 +103,20 @@ test('CLIは指定したMarkdownだけを変換してSlidevへ渡す', async () 
   assert.equal(launched, join(directory, 'target.slidev.md'))
   assert.deepEqual(launchOptions, { open: true })
   assert.match(await readFile(launched, 'utf8'), /theme: ".*\/theme"/)
+})
+
+test('CLIは未展開の再帰globから一意のMarkdownを解決する', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'slidefrom-glob-'))
+  const nested = join(directory, 'nested')
+  await mkdir(nested, { recursive: true })
+  await writeFile(join(nested, 'target.md'), '# 対象')
+  let launched
+  await runCli([join(directory, '**.md')], async outputPath => { launched = outputPath })
+  assert.equal(launched, join(nested, 'target.slidev.md'))
+})
+
+test('CLIはglobの複数候補を勝手に選ばない', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'slidefrom-glob-many-'))
+  await Promise.all([writeFile(join(directory, 'a.md'), '# A'), writeFile(join(directory, 'b.md'), '# B')])
+  await assert.rejects(runCli([join(directory, '**.md')], async () => {}), /Markdownファイルが複数見つかりました/)
 })

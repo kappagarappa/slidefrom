@@ -19,6 +19,12 @@ slidefrom examples/example.md --open
 
 指定したファイルから `*.slidev.md` と `*.slidev.map.json` が生成され、そのデッキだけをSlidevで表示します。`--open`を省略すると、ブラウザーを自動で開かずURLだけを表示します。
 
+WSLやbashで再帰的なglobを使う場合は、シェルによる先行展開を防ぐため引用符で囲みます。候補が1ファイルの場合だけ実行し、複数候補は停止します。
+
+```sh
+slidefrom '**.md' --open
+```
+
 出力先を変える場合:
 
 ```sh

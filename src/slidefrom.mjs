@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
-import { readFile, writeFile } from 'node:fs/promises'
-import { dirname, extname, resolve } from 'node:path'
+import { readdir, readFile, writeFile } from 'node:fs/promises'
+import { dirname, extname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { loadDefaultJapaneseParser } from 'budoux'
 
@@ -303,7 +303,7 @@ async function embedLocalImages(slides, inputPath) {
 }
 
 function usage() {
-  return `使い方: slidefrom <input.md> [-o output.slidev.md] [--open]\n\n指定したMarkdownを組版し、Slidevで表示します。`
+  return `使い方: slidefrom <input.md> [-o output.slidev.md] [--open]\n\n指定したMarkdownを組版し、Slidevで表示します。再帰globを使う場合は引用符で囲み、候補を1ファイルに絞ってください。`
 }
 
 export function startSlidev(outputPath, options = {}) {
@@ -331,10 +331,62 @@ export async function runCli(argv, launch = startSlidev) {
   }
   if (!input) throw new Error('入力Markdownが指定されていません。\n' + usage())
   if ((argv.includes('-o') || argv.includes('--output')) && !output) throw new Error('出力先が指定されていません。')
+  input = await resolveInput(input)
   const { outputPath, slides } = await compile(input, output)
   console.log(`${slides.length}枚を生成しました: ${outputPath}`)
   console.log(slides.map((slide, index) => `${String(index + 1).padStart(2, '0')}  ${slide.layout}  ${plain(slide.title?.text || '')}`).join('\n'))
   await launch(outputPath, { open })
+}
+
+async function resolveInput(input) {
+  if (!/[?*[]/.test(input)) return input
+  const matches = await expandGlob(input)
+  if (!matches.length) throw new Error(`${input}: Markdownファイルが見つかりません。パスを確認してください。`)
+  if (matches.length > 1) {
+    throw new Error(`${input}: Markdownファイルが複数見つかりました。1ファイルだけ指定してください。\n${matches.join('\n')}`)
+  }
+  return matches[0]
+}
+
+async function expandGlob(pattern) {
+  const absolutePattern = resolve(pattern).split(sep).join('/')
+  const wildcardIndex = absolutePattern.search(/[?*[]/)
+  const staticPrefix = absolutePattern.slice(0, wildcardIndex)
+  const root = resolve(staticPrefix.slice(0, staticPrefix.lastIndexOf('/')) || sep)
+  const relativePattern = relative(root, absolutePattern).split(sep).join('/')
+  const matcher = globRegExp(relativePattern)
+  const files = await walkFiles(root)
+  return files.filter(file => matcher.test(relative(root, file).split(sep).join('/'))).sort()
+}
+
+function globRegExp(pattern) {
+  let source = '^'
+  for (let i = 0; i < pattern.length;) {
+    if (pattern.startsWith('**/', i)) { source += '(?:.*/)?'; i += 3; continue }
+    if (pattern.startsWith('**', i)) { source += '.*'; i += 2; continue }
+    if (pattern[i] === '*') { source += '[^/]*'; i++; continue }
+    if (pattern[i] === '?') { source += '[^/]'; i++; continue }
+    if (pattern[i] === '[') {
+      const end = pattern.indexOf(']', i + 1)
+      if (end > i + 1) { source += pattern.slice(i, end + 1); i = end + 1; continue }
+    }
+    source += pattern[i].replace(/[\\^$+?.()|{}]/g, '\\$&')
+    i++
+  }
+  return new RegExp(`${source}$`)
+}
+
+async function walkFiles(directory) {
+  const files = []
+  let entries
+  try { entries = await readdir(directory, { withFileTypes: true }) } catch { return files }
+  for (const entry of entries) {
+    if (entry.name === '.git' || entry.name === 'node_modules') continue
+    const path = join(directory, entry.name)
+    if (entry.isDirectory()) files.push(...await walkFiles(path))
+    else files.push(path)
+  }
+  return files
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) runCli(process.argv.slice(2)).catch(error => { console.error(`slidefrom: ${error.message}`); process.exitCode = 1 })
