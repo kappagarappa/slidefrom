@@ -121,13 +121,24 @@ test('CLIは未展開の再帰globから一意のMarkdownを解決する', async
   assert.equal(launched, join(nested, 'target.slidev.md'))
 })
 
+test('CLIは指定出力を未展開globの候補から除外する', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'slidefrom-glob-output-'))
+  const input = join(directory, '**.md')
+  const output = join(directory, 'deck.md')
+  await writeFile(join(directory, 'target.md'), '# 対象')
+  let launched
+  await runCli([input, '-o', output], async outputPath => { launched = outputPath })
+  await runCli([input, '-o', output], async outputPath => { launched = outputPath })
+  assert.equal(launched, output)
+})
+
 test('CLIはglobの複数候補を勝手に選ばない', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'slidefrom-glob-many-'))
   await Promise.all([writeFile(join(directory, 'a.md'), '# A'), writeFile(join(directory, 'b.md'), '# B')])
   await assert.rejects(runCli([join(directory, '**.md')], async () => {}), /Markdownファイルが複数見つかりました/)
 })
 
-test('CLIはbashの先行展開後も同じglobを連続実行できる', async () => {
+test('CLIはbashの先行展開後も指定出力と同じglobを連続実行できる', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'slidefrom-bash-glob-'))
   await writeFile(join(directory, 'target.md'), '# 対象')
   await writeFile(join(directory, 'runner.mjs'), `import { runCli } from ${JSON.stringify(new URL('../src/slidefrom.mjs', import.meta.url).href)}
@@ -135,18 +146,31 @@ let launched
 await runCli(process.argv.slice(2), async (outputPath, options) => { launched = { outputPath, options } })
 console.log(JSON.stringify(launched))
 `)
-  const command = 'node runner.mjs **.md --open'
-  const first = await execFileAsync('bash', ['-c', command], { cwd: directory })
-  const second = await execFileAsync('bash', ['-c', command], { cwd: directory })
-  const expectedOutput = await realpath(join(directory, 'target.slidev.md'))
-  for (const result of [first, second]) {
+  const defaultCommand = 'node runner.mjs **.md --open'
+  const defaultFirst = await execFileAsync('bash', ['-c', defaultCommand], { cwd: directory })
+  const defaultSecond = await execFileAsync('bash', ['-c', defaultCommand], { cwd: directory })
+  const defaultOutput = await realpath(join(directory, 'target.slidev.md'))
+  for (const result of [defaultFirst, defaultSecond]) {
+    const launched = JSON.parse(result.stdout.trim().split('\n').at(-1))
+    assert.equal(launched.outputPath, defaultOutput)
+    assert.deepEqual(launched.options, { open: true })
+  }
+  await unlink(join(directory, 'target.md'))
+  await assert.rejects(execFileAsync('bash', ['-c', defaultCommand], { cwd: directory }), /生成済みの \*\.slidev\.md は入力できません/)
+  await assert.rejects(readFile(join(directory, 'target.slidev.slidev.md')))
+
+  await writeFile(join(directory, 'target.md'), '# 対象')
+  const outputCommand = 'node runner.mjs **.md -o deck.md --open'
+  const outputFirst = await execFileAsync('bash', ['-c', outputCommand], { cwd: directory })
+  const outputSecond = await execFileAsync('bash', ['-c', outputCommand], { cwd: directory })
+  const expectedOutput = await realpath(join(directory, 'deck.md'))
+  for (const result of [outputFirst, outputSecond]) {
     const launched = JSON.parse(result.stdout.trim().split('\n').at(-1))
     assert.equal(launched.outputPath, expectedOutput)
     assert.deepEqual(launched.options, { open: true })
   }
   await unlink(join(directory, 'target.md'))
-  await assert.rejects(execFileAsync('bash', ['-c', command], { cwd: directory }), /生成済みの \*\.slidev\.md は入力できません/)
-  await assert.rejects(readFile(join(directory, 'target.slidev.slidev.md')))
+  await assert.rejects(execFileAsync('bash', ['-c', outputCommand], { cwd: directory }), /指定した出力先は入力にできません/)
 })
 
 test('CLIヘルプはglobの実行条件と一致する', async () => {

@@ -329,28 +329,35 @@ export async function runCli(argv, launch = startSlidev) {
     else if (argv[i].startsWith('-')) throw new Error(`不明なオプションです: ${argv[i]}`)
     else inputs.push(argv[i])
   }
-  const candidates = inputs.filter(input => !/\.slidev\.md$/i.test(input))
+  const candidates = inputs.filter(input => !isExcludedInput(input, output))
   if (!candidates.length) {
-    const message = inputs.length ? '入力Markdownが見つかりません。生成済みの *.slidev.md は入力できません。' : '入力Markdownが指定されていません。\n' + usage()
+    const outputInput = output && inputs.some(input => resolve(input) === resolve(output))
+    const message = inputs.length
+      ? outputInput ? '入力Markdownが見つかりません。指定した出力先は入力にできません。' : '入力Markdownが見つかりません。生成済みの *.slidev.md は入力できません。'
+      : '入力Markdownが指定されていません。\n' + usage()
     throw new Error(message)
   }
   if (candidates.length > 1) throw new Error(`入力は1ファイルだけ指定できます: ${candidates[1]}`)
   if ((argv.includes('-o') || argv.includes('--output')) && !output) throw new Error('出力先が指定されていません。')
-  const input = await resolveInput(candidates[0])
+  const input = await resolveInput(candidates[0], output)
   const { outputPath, slides } = await compile(input, output)
   console.log(`${slides.length}枚を生成しました: ${outputPath}`)
   console.log(slides.map((slide, index) => `${String(index + 1).padStart(2, '0')}  ${slide.layout}  ${plain(slide.title?.text || '')}`).join('\n'))
   await launch(outputPath, { open })
 }
 
-async function resolveInput(input) {
+async function resolveInput(input, output) {
   if (!/[?*[]/.test(input)) return input
-  const matches = (await expandGlob(input)).filter(path => !/\.slidev\.md$/i.test(path))
+  const matches = (await expandGlob(input)).filter(path => !isExcludedInput(path, output))
   if (!matches.length) throw new Error(`${input}: Markdownファイルが見つかりません。パスを確認してください。`)
   if (matches.length > 1) {
     throw new Error(`${input}: Markdownファイルが複数見つかりました。1ファイルだけ指定してください。\n${matches.join('\n')}`)
   }
   return matches[0]
+}
+
+function isExcludedInput(input, output) {
+  return /\.slidev\.md$/i.test(input) || (output && resolve(input) === resolve(output))
 }
 
 async function expandGlob(pattern) {
