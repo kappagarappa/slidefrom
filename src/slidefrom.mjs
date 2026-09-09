@@ -374,14 +374,17 @@ async function expandGlob(pattern) {
 function globRegExp(pattern) {
   let source = '^'
   for (let i = 0; i < pattern.length;) {
-    if (pattern.startsWith('**/', i)) { source += '(?:.*/)?'; i += 3; continue }
-    if (pattern.startsWith('**', i)) { source += '.*'; i += 2; continue }
-    if (pattern[i] === '*') { source += '[^/]*'; i++; continue }
-    if (pattern[i] === '?') { source += '[^/]'; i++; continue }
+    const segmentStart = i === 0 || pattern[i - 1] === '/'
+    if (pattern.startsWith('**/', i)) { source += segmentStart ? '(?:(?!\\.)[^/]+/)*' : '(?:.*/)?'; i += 3; continue }
+    if (pattern.startsWith('**', i)) { source += segmentStart ? '(?!\\.)(?!.*\\/\\.).*' : '.*'; i += 2; continue }
+    if (pattern[i] === '*') { source += segmentStart ? '(?!\\.)[^/]*' : '[^/]*'; i++; continue }
+    if (pattern[i] === '?') { source += segmentStart ? '(?!\\.)[^/]' : '[^/]'; i++; continue }
     if (pattern[i] === '[') {
       const end = pattern.indexOf(']', i + 1)
       if (end > i + 1) {
-        source += pattern[i + 1] === '!' ? `[^/${pattern.slice(i + 2, end + 1)}` : pattern.slice(i, end + 1)
+        const negated = pattern[i + 1] === '!' || pattern[i + 1] === '^'
+        source += segmentStart && negated ? '(?!\\.)' : ''
+        source += negated ? `[^/${pattern.slice(i + 2, end + 1)}` : pattern.slice(i, end + 1)
         i = end + 1
         continue
       }

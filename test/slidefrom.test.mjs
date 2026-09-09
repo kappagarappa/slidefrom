@@ -156,6 +156,26 @@ test('CLIは否定文字クラスでパス区切りを跨がない', async () =>
   await assert.rejects(runCli([join(directory, 'foo[!a]*.md')], async () => {}), /Markdownファイルが見つかりません/)
 })
 
+test('CLIはglobのセグメント先頭でドットファイルを選ばない', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'slidefrom-glob-dotfile-'))
+  const rootSecret = join(directory, '.secret.md')
+  await writeFile(rootSecret, '# Secret')
+  await assert.rejects(runCli([join(directory, '*.md')], async () => {}), /Markdownファイルが見つかりません/)
+  await unlink(rootSecret)
+  await mkdir(join(directory, 'visible'))
+  await writeFile(join(directory, 'visible', '.secret.md'), '# Secret')
+  await mkdir(join(directory, '.hidden'))
+  await writeFile(join(directory, '.hidden', 'file.md'), '# File')
+  await assert.rejects(runCli([join(directory, '**.md')], async () => {}), /Markdownファイルが見つかりません/)
+})
+
+test('CLIはキャレット否定文字クラスでパス区切りを跨がない', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'slidefrom-glob-caret-'))
+  await mkdir(join(directory, 'foo'))
+  await writeFile(join(directory, 'foo', 'bar.md'), '# Bar')
+  await assert.rejects(runCli([join(directory, 'foo[^a]*.md')], async () => {}), /Markdownファイルが見つかりません/)
+})
+
 test('CLIは閉じていない角括弧をファイル名として扱う', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'slidefrom-literal-bracket-'))
   const input = join(directory, 'report[.md')
