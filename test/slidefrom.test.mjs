@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { mkdir, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
+import { promisify } from 'node:util'
 import { compile, parseMarkdown, planSlides, renderDeck, runCli } from '../src/slidefrom.mjs'
+
+const execFileAsync = promisify(execFile)
 
 const markdown = `# 表紙
 
@@ -112,6 +116,7 @@ test('CLIは未展開の再帰globから一意のMarkdownを解決する', async
   await writeFile(join(nested, 'target.md'), '# 対象')
   let launched
   await runCli([join(directory, '**.md')], async outputPath => { launched = outputPath })
+  await runCli([join(directory, '**.md')], async outputPath => { launched = outputPath })
   assert.equal(launched, join(nested, 'target.slidev.md'))
 })
 
@@ -119,4 +124,23 @@ test('CLIはglobの複数候補を勝手に選ばない', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'slidefrom-glob-many-'))
   await Promise.all([writeFile(join(directory, 'a.md'), '# A'), writeFile(join(directory, 'b.md'), '# B')])
   await assert.rejects(runCli([join(directory, '**.md')], async () => {}), /Markdownファイルが複数見つかりました/)
+})
+
+test('CLIはbashの先行展開後も同じglobを連続実行できる', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'slidefrom-bash-glob-'))
+  await writeFile(join(directory, 'target.md'), '# 対象')
+  await writeFile(join(directory, 'runner.mjs'), `import { runCli } from ${JSON.stringify(new URL('../src/slidefrom.mjs', import.meta.url).href)}
+let launched
+await runCli(process.argv.slice(2), async (outputPath, options) => { launched = { outputPath, options } })
+console.log(JSON.stringify(launched))
+`)
+  const command = 'node runner.mjs **.md --open'
+  const first = await execFileAsync('bash', ['-c', command], { cwd: directory })
+  const second = await execFileAsync('bash', ['-c', command], { cwd: directory })
+  const expectedOutput = await realpath(join(directory, 'target.slidev.md'))
+  for (const result of [first, second]) {
+    const launched = JSON.parse(result.stdout.trim().split('\n').at(-1))
+    assert.equal(launched.outputPath, expectedOutput)
+    assert.deepEqual(launched.options, { open: true })
+  }
 })

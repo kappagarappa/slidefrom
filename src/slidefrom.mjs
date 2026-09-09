@@ -321,17 +321,20 @@ export function startSlidev(outputPath, options = {}) {
 
 export async function runCli(argv, launch = startSlidev) {
   if (argv.includes('-h') || argv.includes('--help')) { console.log(usage()); return }
-  let input, output, open = false
+  const inputs = []
+  let output, open = false
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '-o' || argv[i] === '--output') output = argv[++i]
     else if (argv[i] === '--open') open = true
     else if (argv[i].startsWith('-')) throw new Error(`不明なオプションです: ${argv[i]}`)
-    else if (!input) input = argv[i]
-    else throw new Error(`入力は1ファイルだけ指定できます: ${argv[i]}`)
+    else inputs.push(argv[i])
   }
-  if (!input) throw new Error('入力Markdownが指定されていません。\n' + usage())
+  const sourceInputs = inputs.filter(input => !/\.slidev\.md$/i.test(input))
+  const candidates = sourceInputs.length ? sourceInputs : inputs
+  if (!candidates.length) throw new Error('入力Markdownが指定されていません。\n' + usage())
+  if (candidates.length > 1) throw new Error(`入力は1ファイルだけ指定できます: ${candidates[1]}`)
   if ((argv.includes('-o') || argv.includes('--output')) && !output) throw new Error('出力先が指定されていません。')
-  input = await resolveInput(input)
+  const input = await resolveInput(candidates[0])
   const { outputPath, slides } = await compile(input, output)
   console.log(`${slides.length}枚を生成しました: ${outputPath}`)
   console.log(slides.map((slide, index) => `${String(index + 1).padStart(2, '0')}  ${slide.layout}  ${plain(slide.title?.text || '')}`).join('\n'))
@@ -340,7 +343,7 @@ export async function runCli(argv, launch = startSlidev) {
 
 async function resolveInput(input) {
   if (!/[?*[]/.test(input)) return input
-  const matches = await expandGlob(input)
+  const matches = (await expandGlob(input)).filter(path => !/\.slidev\.md$/i.test(path))
   if (!matches.length) throw new Error(`${input}: Markdownファイルが見つかりません。パスを確認してください。`)
   if (matches.length > 1) {
     throw new Error(`${input}: Markdownファイルが複数見つかりました。1ファイルだけ指定してください。\n${matches.join('\n')}`)
