@@ -387,7 +387,7 @@ function globRegExp(pattern) {
       if (end > i + 1) {
         const negated = pattern[i + 1] === '!' || pattern[i + 1] === '^'
         source += segmentStart ? '(?!\\.)' : ''
-        source += negated ? `[^/${pattern.slice(i + 2, end + 1)}` : pattern.slice(i, end + 1)
+        source += negated ? `[^/${pattern.slice(i + 2, end + 1)}` : pattern.slice(i, end + 1).replaceAll('/', '')
         i = end + 1
         continue
       }

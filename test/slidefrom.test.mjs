@@ -175,6 +175,13 @@ test('CLIはglobの正文字クラスもドットファイルを選ばない', a
   await assert.rejects(runCli([join(directory, '[.]*.md')], async () => {}), /Markdownファイルが見つかりません/)
 })
 
+test('CLIは正文字クラスでパス区切りを跨がない', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'slidefrom-glob-positive-separator-'))
+  await mkdir(join(directory, 'foo'))
+  await writeFile(join(directory, 'foo', 'bar.md'), '# Bar')
+  await assert.rejects(runCli([join(directory, 'foo[/]*.md')], async () => {}), /Markdownファイルが見つかりません/)
+})
+
 test('CLIはキャレット否定文字クラスでパス区切りを跨がない', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'slidefrom-glob-caret-'))
   await mkdir(join(directory, 'foo'))
