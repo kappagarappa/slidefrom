@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { spawnSync } from 'node:child_process'
+import { mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -104,4 +105,13 @@ test('CLIは指定したMarkdownだけを変換してSlidevへ渡す', async () 
   assert.equal(launched, join(directory, 'target.slidev.md'))
   assert.deepEqual(launchOptions, { open: true })
   assert.match(await readFile(launched, 'utf8'), /theme: ".*\/theme"/)
+})
+
+test('CLIはシンボリックリンク経由でも起動する', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'slidefrom-bin-'))
+  const command = join(directory, 'slidefrom')
+  await symlink(join(import.meta.dirname, '../src/slidefrom.mjs'), command)
+  const result = spawnSync(command, ['--help'], { encoding: 'utf8', timeout: 2000 })
+  assert.equal(result.status, 0)
+  assert.match(result.stdout, /使い方: slidefrom/)
 })
