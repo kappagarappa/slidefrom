@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
+import { realpathSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { dirname, extname, resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { loadDefaultJapaneseParser } from 'budoux'
 
 const CONTENT_TYPES = new Set(['heading', 'paragraph', 'list', 'table', 'image', 'code', 'quote'])
@@ -337,4 +338,4 @@ export async function runCli(argv, launch = startSlidev) {
   await launch(outputPath, { open })
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) runCli(process.argv.slice(2)).catch(error => { console.error(`slidefrom: ${error.message}`); process.exitCode = 1 })
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) runCli(process.argv.slice(2)).catch(error => { console.error(`slidefrom: ${error.message}`); process.exitCode = 1 })
