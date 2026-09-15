@@ -45,20 +45,28 @@
   flex-direction: column;
   width: 100%;
   height: 100%;
-  padding: 84px 100px 58px;
+  padding: 80px 96px 56px;
   overflow: hidden;
 }
 
 .slidefrom .slide-content {
   flex: 1;
   min-height: 0;
+  overflow: hidden;
+}
+
+.slidefrom .slide-content-fit {
+  width: calc(100% / var(--fit-scale, 1));
+  height: calc(100% / var(--fit-scale, 1));
+  transform: scale(var(--fit-scale, 1));
+  transform-origin: top left;
 }
 
 .slidefrom footer {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  height: 42px;
+  height: 40px;
   font-size: 24px;
   font-variant-numeric: tabular-nums;
 }
@@ -78,21 +86,21 @@
 }
 
 .slidefrom h1 {
-  font-size: 112px;
+  font-size: 104px;
   font-weight: 800;
   line-height: 1.1;
   letter-spacing: -.02em;
 }
 
 .slidefrom h2 {
-  font-size: 62px;
+  font-size: 56px;
   font-weight: 800;
   line-height: 1.3;
   letter-spacing: -.01em;
 }
 
 .slidefrom h3 {
-  font-size: 40px;
+  font-size: 36px;
   font-weight: 800;
   line-height: 1.35;
 }
@@ -103,15 +111,15 @@
 .slidefrom th,
 .slidefrom blockquote {
   font-size: 30px;
-  line-height: 1.65;
+  line-height: 1.5;
 }
 
 .slidefrom p + p {
   margin-top: 24px;
 }
 
-.slidefrom a {
-  color: var(--accent);
+.slidefrom a:any-link {
+  color: inherit;
   text-decoration: none;
 }
 
@@ -173,9 +181,9 @@
 
 .slidefrom .agenda li,
 .slidefrom .bullets li {
-  padding: 34px 0 34px calc(var(--depth, 0) * 32px);
+  padding: 24px 0 24px calc(var(--depth, 0) * 32px);
   border-bottom: 1px solid #1114;
-  font-size: 38px;
+  font-size: 36px;
   font-weight: 700;
 }
 
@@ -340,11 +348,13 @@
   border-bottom: 3px solid var(--ink);
   font-size: 25px;
   text-align: left;
+  vertical-align: top;
 }
 
 .slidefrom td {
   padding: 20px 28px 20px 0;
   border-bottom: 1px solid #1114;
+  vertical-align: top;
 }
 
 .slidefrom .row-head {
@@ -444,10 +454,18 @@
 
 .slidefrom .references li,
 .slidefrom .references > p {
-  padding: 19px 0;
+  padding: 12px 0;
   border-bottom: 1px solid #1114;
-  font-size: 25px;
-  line-height: 1.55;
+  font-size: 20px;
+  line-height: 1.5;
+}
+
+.slidefrom .reference-url {
+  display: block;
+  margin-top: 2px;
+  font-size: .82em;
+  font-weight: 400;
+  overflow-wrap: anywhere;
 }
 
 .slidefrom.is-appendix::after {
