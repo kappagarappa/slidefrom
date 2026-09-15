@@ -11,6 +11,8 @@ const CONTENT_TYPES = new Set(['heading', 'paragraph', 'list', 'table', 'image',
 const japaneseParser = loadDefaultJapaneseParser()
 const themePath = fileURLToPath(new URL('../theme', import.meta.url))
 const slidevBin = fileURLToPath(import.meta.resolve('@slidev/cli/bin/slidev.mjs'))
+const signalExitCodes = { SIGINT: 130, SIGTERM: 143 }
+let runningSlidev = null
 
 export function parseMarkdown(source, file = 'input.md') {
   const lines = source.replace(/\r\n?/g, '\n').split('\n')
@@ -338,8 +340,16 @@ export function startSlidev(outputPath, options = {}) {
     const args = [slidevBin, outputPath]
     if (options.open) args.push('--open')
     const child = spawn(process.execPath, args, { cwd: dirname(outputPath), stdio: 'inherit' })
-    child.once('error', reject)
+    runningSlidev = child
+    const clearRunningSlidev = () => {
+      if (runningSlidev === child) runningSlidev = null
+    }
+    child.once('error', error => {
+      clearRunningSlidev()
+      reject(error)
+    })
     child.once('exit', (code, signal) => {
+      clearRunningSlidev()
       if (code === 0 || signal === 'SIGINT' || signal === 'SIGTERM') resolvePromise()
       else reject(new Error(`Slidevが終了しました（終了コード: ${code ?? signal}）。`))
     })
@@ -362,14 +372,27 @@ export async function runCli(argv, launch = startSlidev) {
   if (outputPath && extname(outputPath).toLowerCase() !== '.md') throw new Error(`${outputPath}: 出力には.mdファイルを指定してください。`)
   const workingDirectory = await mkdtemp(join(tmpdir(), 'slidefrom-'))
   const workingDeck = join(workingDirectory, 'deck.slidev.md')
+  let receivedSignal = null
+  const handleSignal = signal => {
+    receivedSignal ||= signal
+    runningSlidev?.kill(signal)
+  }
+  process.on('SIGINT', handleSignal)
+  process.on('SIGTERM', handleSignal)
   try {
     const { slides } = await compile(input, workingDeck)
     if (outputPath) await copyFile(workingDeck, outputPath)
     console.log(outputPath ? `${slides.length}枚を生成しました: ${outputPath}` : `${slides.length}枚を生成しました`)
     console.log(slides.map((slide, index) => `${String(index + 1).padStart(2, '0')}  ${slide.layout}  ${plain(slide.title?.text || '')}`).join('\n'))
-    await launch(workingDeck, { open })
+    if (!receivedSignal) await launch(workingDeck, { open })
   } finally {
-    await rm(workingDirectory, { recursive: true, force: true })
+    try {
+      await rm(workingDirectory, { recursive: true, force: true })
+    } finally {
+      process.off('SIGINT', handleSignal)
+      process.off('SIGTERM', handleSignal)
+      if (receivedSignal) process.exitCode = signalExitCodes[receivedSignal]
+    }
   }
 }
 

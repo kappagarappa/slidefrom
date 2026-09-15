@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { access, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises'
+import { access, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -160,6 +160,41 @@ test('CLIの明示出力はdeckだけ残してSlidevを一時deckで起動する
   await assert.rejects(() => access(join(directory, 'output.slidev.map.json')), { code: 'ENOENT' })
   await assert.rejects(() => access(join(directory, 'node_modules', '.slidev')), { code: 'ENOENT' })
   await assert.rejects(() => access(launched), { code: 'ENOENT' })
+})
+
+test('Ctrl-C相当のシグナル後に一時deckを削除しsignal handlerを外す', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'slidefrom-cli-signal-'))
+  const input = join(directory, 'target.md')
+  const started = join(directory, 'started.json')
+  const finished = join(directory, 'finished.json')
+  await writeFile(input, '# 対象')
+  const script = `
+import { writeFileSync } from 'node:fs'
+import { runCli } from ${JSON.stringify(new URL('../src/slidefrom.mjs', import.meta.url).href)}
+
+const [input, started, finished] = process.argv.slice(1)
+await runCli([input], async outputPath => {
+  writeFileSync(started, JSON.stringify({ outputPath, sigintHandlers: process.listenerCount('SIGINT') }))
+  process.kill(process.pid, 'SIGINT')
+  await new Promise(resolve => setImmediate(resolve))
+})
+writeFileSync(finished, JSON.stringify({
+  sigintHandlers: process.listenerCount('SIGINT'),
+  sigtermHandlers: process.listenerCount('SIGTERM'),
+}))
+`
+  try {
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', script, input, started, finished], { encoding: 'utf8' })
+    assert.equal(result.status, 130)
+    const launched = JSON.parse(await readFile(started, 'utf8'))
+    const completed = JSON.parse(await readFile(finished, 'utf8'))
+    assert.equal(launched.sigintHandlers, 1)
+    assert.equal(completed.sigintHandlers, 0)
+    assert.equal(completed.sigtermHandlers, 0)
+    await assert.rejects(() => access(launched.outputPath), { code: 'ENOENT' })
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
 })
 
 test('CLIはシンボリックリンク経由でも起動する', async () => {
