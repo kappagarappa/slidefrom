@@ -179,18 +179,11 @@ function numericTable(table) {
 }
 
 function looksLikeTimeline(list) {
-  return list.items.length === 1
-    ? arrowTimelineStages(list.items[0].text) !== null
-    : list.items.length > 1 && list.items.every(item => isTimelineLabel(item.text))
+  return list.items.length > 1 && list.items.every(item => isTimelineLabel(item.text))
 }
 
 function isTimelineLabel(value) {
   return /^(\d{4}年|\d{1,2}月|\d{1,2}[/-]\d{1,2}|Q[1-4]|第\d+[期章]|春|夏|秋|冬)(\s|[:：]|$)/i.test(plain(value))
-}
-
-function arrowTimelineStages(value) {
-  const stages = value.split(/\s*→\s*/)
-  return stages.length > 1 && stages.every(isTimelineLabel) ? stages : null
 }
 
 function validatePlan(nodes, slides) {
@@ -235,18 +228,14 @@ function viewSlide(slide, index, total, imageSources) {
 
 function viewNode(node, imageSources, showLinkUrls = false) {
   if (node.type === 'heading' || node.type === 'paragraph') return { ...node, html: kumi(node.text, { showLinkUrls }) }
-  if (node.type === 'list') return { ...node, items: node.items.flatMap(item => {
-    const stages = node.items.length === 1 ? arrowTimelineStages(item.text) || [item.text] : [item.text]
-    return stages.map(text => {
-      const timeline = text.match(/^(.+?)([:：]\s*)(.+)$/)
-      return {
-        ...item,
-        text,
-        html: kumi(text, { showLinkUrls }),
-        labelHtml: inline(timeline ? timeline[1] + timeline[2] : stages.length > 1 ? text : ''),
-        detailHtml: kumi(timeline ? timeline[3] : stages.length > 1 ? '' : text),
-      }
-    })
+  if (node.type === 'list') return { ...node, items: node.items.map(item => {
+    const timeline = item.text.match(/^(.+?)([:：]\s*)(.+)$/)
+    return {
+      ...item,
+      html: kumi(item.text, { showLinkUrls }),
+      labelHtml: inline(timeline ? timeline[1] + timeline[2] : ''),
+      detailHtml: kumi(timeline ? timeline[3] : item.text),
+    }
   }) }
   if (node.type === 'table') return { ...node, headerHtml: node.header.map(value => kumi(value, { showLinkUrls })), rowsHtml: node.rows.map(row => row.map(value => kumi(value, { showLinkUrls }))) }
   if (node.type === 'image') return { ...node, src: imageSources?.get(node.url) || safeUrl(node.url, true), captionHtml: kumi(node.title || node.alt) }

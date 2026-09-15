@@ -52,15 +52,16 @@ test('Markdownの順序を保ってレイアウトを選ぶ', () => {
   assert.deepEqual(slides.flatMap(slide => slide.nodeIds), nodes.filter(node => node.type !== 'hr').map(node => node.id))
 })
 
-test('矢印でつないだ1項目を3段階のタイムラインとして表示する', () => {
-  for (const arrow of [' → ', '→']) {
-    const nodes = parseMarkdown(`# 表紙\n\n## 予定\n\n- 7月${arrow}8月${arrow}9月`)
-    const slides = planSlides(nodes)
-    assert.equal(slides[1].layout, 'timeline')
-    const rendered = renderDeck(nodes, slides)
-    const renderedSlides = [...rendered.matchAll(/^slide: (.+)$/gm)].map(match => JSON.parse(match[1]))
-    assert.deepEqual(renderedSlides[1].body.find(node => node.type === 'list').items.map(item => item.text), ['7月', '8月', '9月'])
-  }
+test('時系列ラベルの複数箇条書きだけをタイムラインとして表示する', () => {
+  const arrowNodes = parseMarkdown('# 表紙\n\n## 予定\n\n- 7月 → 8月 → 9月')
+  const arrowSlides = planSlides(arrowNodes)
+  assert.equal(arrowSlides[1].layout, 'bullets')
+  const arrowRendered = renderDeck(arrowNodes, arrowSlides)
+  const arrowRenderedSlides = [...arrowRendered.matchAll(/^slide: (.+)$/gm)].map(match => JSON.parse(match[1]))
+  assert.deepEqual(arrowRenderedSlides[1].body.find(node => node.type === 'list').items.map(item => item.text), ['7月 → 8月 → 9月'])
+
+  const monthlyNodes = parseMarkdown('# 表紙\n\n## 予定\n\n- 7月：企画\n- 8月：制作\n- 9月：公開')
+  assert.equal(planSlides(monthlyNodes)[1].layout, 'timeline')
 })
 
 test('危険なリンクを実行可能なURLとして出力しない', () => {
