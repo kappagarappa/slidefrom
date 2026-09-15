@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import SlidefromContent from './SlidefromContent.vue'
 
 const props = defineProps({
@@ -8,6 +8,32 @@ const props = defineProps({
     required: true,
   },
 })
+
+const viewport = ref()
+const content = ref()
+const fitScale = ref(1)
+let resizeObserver
+
+const fitContent = async () => {
+  fitScale.value = 1
+  await nextTick()
+  if (!viewport.value?.clientWidth || !viewport.value.clientHeight || !content.value?.scrollWidth || !content.value.scrollHeight) return
+  for (let pass = 0; pass < 4; pass++) {
+    const ratio = Math.min(1, content.value.clientWidth / content.value.scrollWidth, content.value.clientHeight / content.value.scrollHeight)
+    if (ratio > .999) break
+    fitScale.value *= ratio * .985
+    await nextTick()
+  }
+}
+
+onMounted(async () => {
+  await fitContent()
+  document.fonts?.ready.then(fitContent)
+  resizeObserver = new ResizeObserver(fitContent)
+  resizeObserver.observe(viewport.value)
+})
+
+onBeforeUnmount(() => resizeObserver?.disconnect())
 
 const bodyOf = type => computed(() => props.slide.body.filter(node => node.type === type))
 const paragraphs = bodyOf('paragraph')
@@ -48,12 +74,15 @@ const linePoints = series => table.value.rows.map((row, index) => `${lineX(index
 <template>
   <div
     :class="['slidefrom', `layout-${slide.layout}`, { 'is-appendix': slide.role === 'appendix' }]"
+    :style="{ '--fit-scale': fitScale }"
     :data-layout="slide.layout"
+    :data-fit-scale="fitScale.toFixed(3)"
     :data-source-lines="slideSourceLines"
     :aria-label="slide.label"
   >
-    <div class="slide-content">
-      <div v-if="slide.layout === 'cover'" class="center">
+    <div ref="viewport" class="slide-content">
+      <div ref="content" class="slide-content-fit">
+        <div v-if="slide.layout === 'cover'" class="center">
         <h1 :data-node-id="slide.title.id" :data-source-lines="sourceLines(slide.title)" v-html="slide.title.html" />
         <i class="accent-rule" />
         <SlidefromContent :nodes="slide.body" />
@@ -94,7 +123,7 @@ const linePoints = series => table.value.rows.map((row, index) => `${lineX(index
         <div class="rule" />
         <SlidefromContent :nodes="paragraphs" />
         <div v-if="list" class="timeline" :data-node-id="list.id" :data-source-lines="sourceLines(list)">
-          <div v-for="item in list.items" :key="item.line" :data-source-line="item.line">
+          <div v-for="(item, index) in list.items" :key="`${item.line}-${index}`" :data-source-line="item.line">
             <b v-html="item.labelHtml" /><span v-html="item.detailHtml" />
           </div>
         </div>
@@ -185,6 +214,7 @@ const linePoints = series => table.value.rows.map((row, index) => `${lineX(index
       <div v-else class="center statement">
         <h2 :data-node-id="slide.title.id" :data-source-lines="sourceLines(slide.title)" v-html="slide.title.html" />
         <SlidefromContent :nodes="slide.body" />
+        </div>
       </div>
     </div>
 
