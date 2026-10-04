@@ -17,7 +17,7 @@ npm link
 slidefrom examples/example.md --open
 ```
 
-変換用ファイルはOSの一時領域に作成し、Slidevの終了後に削除します。入力ファイルの隣には生成物を残しません。`--open`を省略すると、ブラウザーを自動で開かずURLだけを表示します。
+既定では入力ファイルの隣に`input.slidev.md`だけを保存し、Slidevには一時deckを渡します。一時deckとソースマップはSlidevの終了後に削除します。`--open`を省略すると、ブラウザーを自動で開かずURLだけを表示します。
 
 出力先を変える場合:
 

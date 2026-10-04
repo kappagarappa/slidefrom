@@ -116,7 +116,7 @@ test('ローカル画像をSlidevの表示とビルドで使える形にする',
   assert.match(await readFile(output, 'utf8'), /"src":"data:image\/png;base64,aW1hZ2U="/)
 })
 
-test('CLIは入力の隣に生成物を残さず一時deckをSlidevへ渡す', async () => {
+test('CLIは既定出力を入力の隣に保存し一時deckをSlidevへ渡す', async () => {
   const { runCli } = await import('../src/slidefrom.mjs')
   const directory = await mkdtemp(join(tmpdir(), 'slidefrom-cli-'))
   const input = join(directory, 'target.md')
@@ -130,12 +130,12 @@ test('CLIは入力の隣に生成物を残さず一時deckをSlidevへ渡す', a
   } finally {
     console.log = originalLog
   }
-  assert.equal(messages[0], '1枚を生成しました')
+  assert.equal(messages[0], `1枚を生成しました: ${join(directory, 'target.slidev.md')}`)
   assert.notEqual(launched, join(directory, 'target.slidev.md'))
   assert.equal(launched.endsWith('/deck.slidev.md'), true)
   assert.deepEqual(launchOptions, { open: true })
   await assert.rejects(() => access(launched), { code: 'ENOENT' })
-  await assert.rejects(() => access(join(directory, 'target.slidev.md')), { code: 'ENOENT' })
+  await access(join(directory, 'target.slidev.md'))
   await assert.rejects(() => access(join(directory, 'target.slidev.map.json')), { code: 'ENOENT' })
   await assert.rejects(() => access(join(directory, 'node_modules', '.slidev')), { code: 'ENOENT' })
 })

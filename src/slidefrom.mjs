@@ -357,7 +357,7 @@ export async function runCli(argv, launch = startSlidev) {
   }
   if (!input) throw new Error('入力Markdownが指定されていません。\n' + usage())
   if ((argv.includes('-o') || argv.includes('--output')) && !output) throw new Error('出力先が指定されていません。')
-  const outputPath = output ? resolve(output) : null
+  const outputPath = resolve(output || input.replace(/\.md$/i, '.slidev.md'))
   if (outputPath && extname(outputPath).toLowerCase() !== '.md') throw new Error(`${outputPath}: 出力には.mdファイルを指定してください。`)
   const workingDirectory = await mkdtemp(join(tmpdir(), 'slidefrom-'))
   const workingDeck = join(workingDirectory, 'deck.slidev.md')
@@ -370,8 +370,8 @@ export async function runCli(argv, launch = startSlidev) {
   process.on('SIGTERM', handleSignal)
   try {
     const { slides } = await compile(input, workingDeck)
-    if (outputPath) await copyFile(workingDeck, outputPath)
-    console.log(outputPath ? `${slides.length}枚を生成しました: ${outputPath}` : `${slides.length}枚を生成しました`)
+    await copyFile(workingDeck, outputPath)
+    console.log(`${slides.length}枚を生成しました: ${outputPath}`)
     console.log(slides.map((slide, index) => `${String(index + 1).padStart(2, '0')}  ${slide.layout}  ${plain(slide.title?.text || '')}`).join('\n'))
     if (!receivedSignal) await launch(workingDeck, { open })
   } finally {
