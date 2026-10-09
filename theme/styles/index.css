@@ -45,20 +45,28 @@
   flex-direction: column;
   width: 100%;
   height: 100%;
-  padding: 84px 100px 58px;
+  padding: 64px;
   overflow: hidden;
 }
 
 .slidefrom .slide-content {
   flex: 1;
   min-height: 0;
+  overflow: hidden;
+}
+
+.slidefrom .slide-content-fit {
+  width: calc(100% / var(--fit-scale, 1));
+  height: calc(100% / var(--fit-scale, 1));
+  transform: scale(var(--fit-scale, 1));
+  transform-origin: top left;
 }
 
 .slidefrom footer {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  height: 42px;
+  height: 40px;
   font-size: 24px;
   font-variant-numeric: tabular-nums;
 }
@@ -78,21 +86,21 @@
 }
 
 .slidefrom h1 {
-  font-size: 112px;
+  font-size: 104px;
   font-weight: 800;
   line-height: 1.1;
   letter-spacing: -.02em;
 }
 
 .slidefrom h2 {
-  font-size: 62px;
+  font-size: 56px;
   font-weight: 800;
   line-height: 1.3;
   letter-spacing: -.01em;
 }
 
 .slidefrom h3 {
-  font-size: 40px;
+  font-size: 36px;
   font-weight: 800;
   line-height: 1.35;
 }
@@ -103,15 +111,15 @@
 .slidefrom th,
 .slidefrom blockquote {
   font-size: 30px;
-  line-height: 1.65;
+  line-height: 1.5;
 }
 
 .slidefrom p + p {
   margin-top: 24px;
 }
 
-.slidefrom a {
-  color: var(--accent);
+.slidefrom a:any-link {
+  color: inherit;
   text-decoration: none;
 }
 
@@ -151,7 +159,7 @@
 .slidefrom .rule {
   width: 100%;
   height: 3px;
-  margin-top: 28px;
+  margin-top: 32px;
   background: var(--ink);
 }
 
@@ -167,15 +175,16 @@
 .slidefrom .summary {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  height: calc(100% - 115px);
+  justify-content: flex-start;
+  height: auto;
+  margin-top: 32px;
 }
 
 .slidefrom .agenda li,
 .slidefrom .bullets li {
-  padding: 34px 0 34px calc(var(--depth, 0) * 32px);
+  padding: 24px 0 24px calc(var(--depth, 0) * 32px);
   border-bottom: 1px solid #1114;
-  font-size: 38px;
+  font-size: 36px;
   font-weight: 700;
 }
 
@@ -194,10 +203,11 @@
 
 .slidefrom .flow {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  height: calc(100% - 145px);
-  gap: 20px;
+  height: auto;
+  margin-top: 32px;
+  gap: 24px;
 }
 
 .slidefrom .flow .step {
@@ -205,7 +215,7 @@
   flex: 1;
   flex-direction: column;
   min-width: 0;
-  gap: 22px;
+  gap: 24px;
 }
 
 .slidefrom .flow .step > b {
@@ -234,8 +244,8 @@
 .slidefrom .flow.vertical {
   align-items: stretch;
   flex-direction: column;
-  height: calc(100% - 125px);
-  padding: 25px 0;
+  height: auto;
+  padding: 0;
   gap: 12px;
 }
 
@@ -246,64 +256,56 @@
 }
 
 .slidefrom .timeline {
-  position: relative;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   justify-content: center;
-  height: calc(100% - 125px);
-}
-
-.slidefrom .timeline::before {
-  position: absolute;
-  top: 12%;
-  bottom: 12%;
-  left: 170px;
-  width: 5px;
-  background: var(--accent);
-  content: "";
+  height: auto;
+  margin-top: 32px;
+  gap: 24px;
 }
 
 .slidefrom .timeline > div {
-  display: grid;
-  grid-template-columns: 145px 1fr;
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   align-items: center;
-  min-height: 115px;
-  gap: 55px;
+  justify-content: flex-start;
+  min-width: 0;
+  gap: 8px;
+  padding: 0;
+}
+
+.slidefrom .timeline > div:not(:last-child)::after {
+  position: absolute;
+  top: 16px;
+  right: -21px;
+  color: #1116;
+  content: "→";
+  font-size: 32px;
 }
 
 .slidefrom .timeline b {
   color: var(--accent);
   font-size: 30px;
-  text-align: right;
+  text-align: center;
 }
 
 .slidefrom .timeline span {
-  position: relative;
   font-size: 34px;
   font-weight: 700;
-}
-
-.slidefrom .timeline span::before {
-  position: absolute;
-  top: .5em;
-  left: -70px;
-  width: 24px;
-  height: 24px;
-  border: 5px solid var(--accent);
-  border-radius: 50%;
-  background: #fff;
-  content: "";
+  text-align: center;
 }
 
 .slidefrom .comparison {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  height: calc(100% - 160px);
-  margin-top: 44px;
+  height: auto;
+  margin-top: 32px;
 }
 
 .slidefrom .comparison article {
-  padding: 20px 64px 0 0;
+  padding: 0 64px 0 0;
 }
 
 .slidefrom .comparison article + article {
@@ -314,7 +316,7 @@
 
 .slidefrom .comparison article ul,
 .slidefrom .comparison article p {
-  margin-top: 28px;
+  margin-top: 32px;
 }
 
 .slidefrom .comparison article li {
@@ -331,7 +333,7 @@
 
 .slidefrom table {
   width: 100%;
-  margin-top: 42px;
+  margin-top: 32px;
   border-collapse: collapse;
 }
 
@@ -340,11 +342,13 @@
   border-bottom: 3px solid var(--ink);
   font-size: 25px;
   text-align: left;
+  vertical-align: top;
 }
 
 .slidefrom td {
   padding: 20px 28px 20px 0;
   border-bottom: 1px solid #1114;
+  vertical-align: top;
 }
 
 .slidefrom .row-head {
@@ -361,19 +365,23 @@
 .slidefrom .image-text article {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
+}
+
+.slidefrom .image-text article h2 {
+  margin-bottom: 32px;
 }
 
 .slidefrom .image-text article p,
 .slidefrom .image-text article ul {
-  margin-top: 28px;
+  margin-top: 0;
 }
 
 .slidefrom .images {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   height: calc(100% - 100px);
-  margin-top: 38px;
+  margin-top: 32px;
   gap: 64px;
 }
 
@@ -399,7 +407,7 @@
 
 .slidefrom .quote {
   max-width: 1200px;
-  margin-top: 54px;
+  margin-top: 32px;
   padding-left: 40px;
   border-left: 3px solid var(--accent);
 }
@@ -419,7 +427,7 @@
 
 .slidefrom pre {
   max-height: 700px;
-  margin: 40px 0 0;
+  margin: 32px 0 0;
   padding: 34px 40px;
   overflow: hidden;
   background: #26333a;
@@ -428,26 +436,69 @@
   white-space: pre-wrap;
 }
 
+.slidefrom .center.statement {
+  display: block;
+  height: auto;
+}
+
 .slidefrom .statement h2 {
-  font-size: 112px;
-  line-height: 1.15;
+  font-size: 56px;
+  line-height: 1.3;
 }
 
 .slidefrom .statement p {
   max-width: 1100px;
-  margin-top: 38px;
+  margin-top: 32px;
 }
 
 .slidefrom .references {
-  margin-top: 25px;
+  margin-top: 32px;
 }
 
 .slidefrom .references li,
 .slidefrom .references > p {
-  padding: 19px 0;
+  padding: 8px 0;
   border-bottom: 1px solid #1114;
-  font-size: 25px;
-  line-height: 1.55;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.slidefrom .reference-url {
+  display: inline;
+  margin-left: .4em;
+  margin-right: .4em;
+  margin-top: 2px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.slidefrom .slide-content .reference-url {
+  display: inline;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  gap: 0;
+}
+
+.slidefrom .slide-content .reference-url::before {
+  content: "(";
+}
+
+.slidefrom .slide-content .reference-url::after {
+  content: ")";
+}
+
+.slidefrom .references .reference-url {
+  display: block;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.slidefrom .references .reference-url::before,
+.slidefrom .references .reference-url::after {
+  content: none;
 }
 
 .slidefrom.is-appendix::after {
@@ -462,7 +513,7 @@
 
 .slidefrom .chart {
   height: calc(100% - 110px);
-  margin-top: 26px;
+  margin-top: 32px;
 }
 
 .slidefrom .legend {

@@ -1,15 +1,18 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
 import { realpathSync } from 'node:fs'
-import { readFile, writeFile } from 'node:fs/promises'
-import { dirname, extname, resolve } from 'node:path'
+import { copyFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { dirname, extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { tmpdir } from 'node:os'
 import { loadDefaultJapaneseParser } from 'budoux'
 
 const CONTENT_TYPES = new Set(['heading', 'paragraph', 'list', 'table', 'image', 'code', 'quote'])
 const japaneseParser = loadDefaultJapaneseParser()
 const themePath = fileURLToPath(new URL('../theme', import.meta.url))
 const slidevBin = fileURLToPath(import.meta.resolve('@slidev/cli/bin/slidev.mjs'))
+const signalExitCodes = { SIGINT: 130, SIGTERM: 143 }
+let runningSlidev = null
 
 export function parseMarkdown(source, file = 'input.md') {
   const lines = source.replace(/\r\n?/g, '\n').split('\n')
@@ -176,7 +179,11 @@ function numericTable(table) {
 }
 
 function looksLikeTimeline(list) {
-  return list.items.length > 1 && list.items.every(item => /(^|\s)(\d{4}年|\d{1,2}月|\d{1,2}[/-]\d{1,2}|Q[1-4]|第\d+[期章]|春|夏|秋|冬)(\s|[:：]|$)/i.test(plain(item.text)))
+  return list.items.length > 1 && list.items.every(item => isTimelineLabel(item.text))
+}
+
+function isTimelineLabel(value) {
+  return /^(\d{4}年\d{1,2}月\d{1,2}日|\d{4}[/-]\d{1,2}[/-]\d{1,2}|\d{1,2}月\d{1,2}日|\d{4}年|\d{1,2}月|\d{1,2}[/-]\d{1,2}|Q[1-4]|第\d+[期章]|春|夏|秋|冬)(\s|[:：]|$)/i.test(plain(value))
 }
 
 function validatePlan(nodes, slides) {
@@ -222,10 +229,15 @@ function viewSlide(slide, index, total, imageSources) {
 function viewNode(node, imageSources) {
   if (node.type === 'heading' || node.type === 'paragraph') return { ...node, html: kumi(node.text) }
   if (node.type === 'list') return { ...node, items: node.items.map(item => {
-    const timeline = item.text.match(/^(.+?)([:：]\s*)(.+)$/)
-    return { ...item, html: kumi(item.text), labelHtml: inline(timeline ? timeline[1] + timeline[2] : ''), detailHtml: kumi(timeline ? timeline[3] : item.text) }
+    const timeline = item.text.match(/^([^:[\]]+?)([:：]\s*)(.+)$/)
+    return {
+      ...item,
+      html: kumi(item.text),
+      labelHtml: inline(timeline ? timeline[1] + timeline[2] : ''),
+      detailHtml: kumi(timeline ? timeline[3] : item.text),
+    }
   }) }
-  if (node.type === 'table') return { ...node, headerHtml: node.header.map(kumi), rowsHtml: node.rows.map(row => row.map(kumi)) }
+  if (node.type === 'table') return { ...node, headerHtml: node.header.map(value => kumi(value)), rowsHtml: node.rows.map(row => row.map(value => kumi(value))) }
   if (node.type === 'image') return { ...node, src: imageSources?.get(node.url) || safeUrl(node.url, true), captionHtml: kumi(node.title || node.alt) }
   if (node.type === 'quote') return { ...node, html: kumi(node.value).replace(/\n/g, '<br>') }
   return node
@@ -238,14 +250,24 @@ function numberFrom(value) {
 
 function inline(value = '') {
   let text = escapeHtml(value)
-  text = text.replace(/`([^`]+)`/g, '<code>$1</code>')
+  const codeSpans = []
+  text = text.replace(/`([^`]+)`/g, (_, code) => {
+    codeSpans.push(code)
+    return `\u0000code${codeSpans.length - 1}\u0000`
+  })
   text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
   text = text.replace(/__([^_]+)__/g, '<strong>$1</strong>')
-  text = text.replace(/\[([^\]]+)\]\(([^ )]+)(?:\s+["'][^"']*["'])?\)/g, (_, label, url) => `<a href="${safeUrl(decodeEntities(url), false)}">${label}</a>`)
-  return text
+  text = text.replace(/\[([^\]]+)\]\(([^ )]+)(?:\s+["'][^"']*["'])?\)/g, (_, label, url) => {
+    const decodedUrl = decodeEntities(url)
+    const visibleUrl = escapeHtml(decodedUrl)
+    const isExternal = /^https?:\/\//i.test(decodedUrl)
+    const suffix = isExternal && decodeEntities(label) !== decodedUrl ? `<span class="reference-url">${visibleUrl}</span>` : ''
+    return `<a href="${safeUrl(decodedUrl, false)}">${label}${suffix}</a>`
+  })
+  return text.replace(/\u0000code(\d+)\u0000/g, (_, index) => `<code>${codeSpans[index]}</code>`)
 }
 
-const kumi = value => japaneseParser.translateHTMLString(inline(value))
+const kumi = value => japaneseParser.translateHTMLString(inline(value)).replace(/(<span class="reference-url">)(.*?)(<\/span>)/g, (_, start, url, end) => `${start}${url.replace(/\u200b/g, '')}${end}`)
 
 function plain(value = '') {
   return value.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/[*_`~]/g, '').trim()
@@ -311,9 +333,17 @@ export function startSlidev(outputPath, options = {}) {
   return new Promise((resolvePromise, reject) => {
     const args = [slidevBin, outputPath]
     if (options.open) args.push('--open')
-    const child = spawn(process.execPath, args, { stdio: 'inherit' })
-    child.once('error', reject)
+    const child = spawn(process.execPath, args, { cwd: dirname(outputPath), stdio: 'inherit' })
+    runningSlidev = child
+    const clearRunningSlidev = () => {
+      if (runningSlidev === child) runningSlidev = null
+    }
+    child.once('error', error => {
+      clearRunningSlidev()
+      reject(error)
+    })
     child.once('exit', (code, signal) => {
+      clearRunningSlidev()
       if (code === 0 || signal === 'SIGINT' || signal === 'SIGTERM') resolvePromise()
       else reject(new Error(`Slidevが終了しました（終了コード: ${code ?? signal}）。`))
     })
@@ -332,10 +362,32 @@ export async function runCli(argv, launch = startSlidev) {
   }
   if (!input) throw new Error('入力Markdownが指定されていません。\n' + usage())
   if ((argv.includes('-o') || argv.includes('--output')) && !output) throw new Error('出力先が指定されていません。')
-  const { outputPath, slides } = await compile(input, output)
-  console.log(`${slides.length}枚を生成しました: ${outputPath}`)
-  console.log(slides.map((slide, index) => `${String(index + 1).padStart(2, '0')}  ${slide.layout}  ${plain(slide.title?.text || '')}`).join('\n'))
-  await launch(outputPath, { open })
+  const outputPath = resolve(output || input.replace(/\.md$/i, '.slidev.md'))
+  if (outputPath && extname(outputPath).toLowerCase() !== '.md') throw new Error(`${outputPath}: 出力には.mdファイルを指定してください。`)
+  const workingDirectory = await mkdtemp(join(tmpdir(), 'slidefrom-'))
+  const workingDeck = join(workingDirectory, 'deck.slidev.md')
+  let receivedSignal = null
+  const handleSignal = signal => {
+    receivedSignal ||= signal
+    runningSlidev?.kill(signal)
+  }
+  process.on('SIGINT', handleSignal)
+  process.on('SIGTERM', handleSignal)
+  try {
+    const { slides } = await compile(input, workingDeck)
+    await copyFile(workingDeck, outputPath)
+    console.log(`${slides.length}枚を生成しました: ${outputPath}`)
+    console.log(slides.map((slide, index) => `${String(index + 1).padStart(2, '0')}  ${slide.layout}  ${plain(slide.title?.text || '')}`).join('\n'))
+    if (!receivedSignal) await launch(workingDeck, { open })
+  } finally {
+    try {
+      await rm(workingDirectory, { recursive: true, force: true })
+    } finally {
+      process.off('SIGINT', handleSignal)
+      process.off('SIGTERM', handleSignal)
+      if (receivedSignal) process.exitCode = signalExitCodes[receivedSignal]
+    }
+  }
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) runCli(process.argv.slice(2)).catch(error => { console.error(`slidefrom: ${error.message}`); process.exitCode = 1 })
