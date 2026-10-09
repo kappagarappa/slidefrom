@@ -62,6 +62,30 @@ test('時系列ラベルの複数箇条書きだけをタイムラインとし�
 
   const monthlyNodes = parseMarkdown('# 表紙\n\n## 予定\n\n- 7月：企画\n- 8月：制作\n- 9月：公開')
   assert.equal(planSlides(monthlyNodes)[1].layout, 'timeline')
+
+  const datedNodes = parseMarkdown(`# 表紙
+
+## 予定
+
+- 7月1日：企画
+- 2026年7月1日：制作
+- 2026/07/01：公開
+- 2026-07-01：振り返り`)
+  const datedSlides = planSlides(datedNodes)
+  assert.equal(datedSlides[1].layout, 'timeline')
+  const datedRenderedSlides = [...renderDeck(datedNodes, datedSlides).matchAll(/^slide: (.+)$/gm)].map(match => JSON.parse(match[1]))
+  const datedItems = datedRenderedSlides[1].body.find(node => node.type === 'list').items
+  assert.deepEqual(datedItems.map(item => item.text), [
+    '7月1日：企画',
+    '2026年7月1日：制作',
+    '2026/07/01：公開',
+    '2026-07-01：振り返り',
+  ])
+  assert.deepEqual(datedItems.map(item => item.labelHtml), ['7月1日：', '2026年7月1日：', '2026/07/01：', '2026-07-01：'])
+  assert.deepEqual(datedItems.map(item => item.detailHtml.replace(/<[^>]+>/g, '')), ['企画', '制作', '公開', '振り返り'])
+
+  const numericNodes = parseMarkdown('# 表紙\n\n## 数値\n\n- 1件：売上\n- 2件：利益')
+  assert.equal(planSlides(numericNodes)[1].layout, 'bullets')
 })
 
 test('危険なリンクを実行可能なURLとして出力しない', () => {
@@ -78,6 +102,95 @@ test('出典ではリンク先URLを印刷できる文字として併記する',
   const html = renderedSlides[1].body.find(node => node.type === 'list').items[0].html
   assert.match(html, /href="https:\/\/design\.digital\.go\.jp\/dads\/"/)
   assert.match(html, /<span class="reference-url">https:\/\/design\.digital\.go\.jp\/dads\/<\/span>/)
+})
+
+test('すべての本文ノードで外部リンクURLを併記しコードと内部リンクは除外する', () => {
+  const markdown = `# 表紙 [表紙リンク](https://cover.example/日本語)
+
+本文の前[本文リンク](https://body.example/one)本文の後と[二つ目](https://body.example/two?lang=ja)。
+
+危険な[危険](javascript:alert(1))リンクも安全化する。
+
+## 本文[本文タイトル](https://main.example/title)
+
+本文[見出し本文](https://heading.example/path)の前後。
+
+- 箇条書きの前[箇条書き](https://list.example/item)の後
+
+## 表
+
+| 項目 | 値 |
+|---|---|
+| 行[表](https://table.example/row) | [表URL](https://table.example/value) |
+
+## 引用
+
+> 引用の[リンク](https://quote.example/source)です。
+
+## 画像
+
+![画像](https://image.example/image.png "キャプション[画像](https://caption.example/text)")
+
+## 予定
+
+- 1月：[予定](https://timeline.example/january)
+- 2月：[予定二](https://timeline.example/february)
+
+## コード
+
+\`[コード](https://code.example/raw)\`
+
+# Appendix
+
+## 付録[見出し](https://appendix.example/title)
+
+付録の[本文](https://appendix.example/body)。
+
+# 出典
+
+## 出典一覧
+
+- [出典](https://references.example/source)
+- [https://same.example/url](https://same.example/url)
+- [内部](#本文)`
+  const nodes = parseMarkdown(markdown)
+  const rendered = renderDeck(nodes, planSlides(nodes))
+  const slides = [...rendered.matchAll(/^slide: (.+)$/gm)].map(match => JSON.parse(match[1]))
+  const htmlValues = []
+  const collectHtml = value => {
+    if (!value || typeof value !== 'object') return
+    for (const [key, child] of Object.entries(value)) {
+      if (key.endsWith('html') || key.endsWith('Html')) htmlValues.push(child)
+      else if (child && typeof child === 'object') collectHtml(child)
+    }
+  }
+  collectHtml(slides)
+  const html = htmlValues.flat(Infinity).join('\n')
+
+  for (const url of [
+    'https://cover.example/日本語',
+    'https://body.example/one',
+    'https://body.example/two?lang=ja',
+    'https://heading.example/path',
+    'https://main.example/title',
+    'https://list.example/item',
+    'https://table.example/row',
+    'https://table.example/value',
+    'https://quote.example/source',
+    'https://caption.example/text',
+    'https://timeline.example/january',
+    'https://timeline.example/february',
+    'https://appendix.example/title',
+    'https://appendix.example/body',
+    'https://references.example/source',
+  ]) {
+    assert.match(html, new RegExp(`<span class="reference-url">${url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}<\\/span>`))
+  }
+  assert.doesNotMatch(html, /<span class="reference-url">https:\/\/same\.example\/url<\/span>/)
+  assert.doesNotMatch(html, /<span class="reference-url">#本文<\/span>/)
+  assert.match(html, /<a href="#">/) // keep unsafe schemes inert when rendered
+  assert.doesNotMatch(html, /href="https:\/\/code\.example\/raw"/)
+  assert.match(html.replace(/\u200b/g, ''), /本文の前.*本文の後/)
 })
 
 test('CLIと同じ経路でSlidev Markdownとソースマップを生成する', async () => {

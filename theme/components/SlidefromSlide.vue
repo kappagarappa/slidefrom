@@ -13,17 +13,45 @@ const viewport = ref()
 const content = ref()
 const fitScale = ref(1)
 let resizeObserver
+let fitRequest = 0
+
+const contentFits = () => {
+  const viewportRect = viewport.value.getBoundingClientRect()
+  const contentRect = content.value.getBoundingClientRect()
+  let left = contentRect.left
+  let top = contentRect.top
+  let right = contentRect.left
+  let bottom = contentRect.top
+  for (const element of content.value.querySelectorAll('*')) {
+    for (const rect of element.getClientRects()) {
+      left = Math.min(left, rect.left)
+      top = Math.min(top, rect.top)
+      right = Math.max(right, rect.right)
+      bottom = Math.max(bottom, rect.bottom)
+    }
+  }
+  return contentRect.left - left <= 1 && contentRect.top - top <= 1 && right - contentRect.left <= viewportRect.width + 1 && bottom - contentRect.top <= viewportRect.height + 1
+}
 
 const fitContent = async () => {
+  const request = ++fitRequest
   fitScale.value = 1
   await nextTick()
-  if (!viewport.value?.clientWidth || !viewport.value.clientHeight || !content.value?.scrollWidth || !content.value.scrollHeight) return
-  for (let pass = 0; pass < 4; pass++) {
-    const ratio = Math.min(1, content.value.clientWidth / content.value.scrollWidth, content.value.clientHeight / content.value.scrollHeight)
-    if (ratio > .999) break
-    fitScale.value *= ratio * .985
+  if (request !== fitRequest || !viewport.value?.clientWidth || !viewport.value.clientHeight || !content.value) return
+  if (contentFits()) return
+
+  let low = .01
+  let high = 1
+  for (let pass = 0; pass < 8; pass++) {
+    const candidate = (low + high) / 2
+    fitScale.value = candidate
     await nextTick()
+    if (request !== fitRequest) return
+    if (contentFits()) low = candidate
+    else high = candidate
   }
+  fitScale.value = low
+  await nextTick()
 }
 
 onMounted(async () => {

@@ -183,7 +183,7 @@ function looksLikeTimeline(list) {
 }
 
 function isTimelineLabel(value) {
-  return /^(\d{4}年|\d{1,2}月|\d{1,2}[/-]\d{1,2}|Q[1-4]|第\d+[期章]|春|夏|秋|冬)(\s|[:：]|$)/i.test(plain(value))
+  return /^(\d{4}年\d{1,2}月\d{1,2}日|\d{4}[/-]\d{1,2}[/-]\d{1,2}|\d{1,2}月\d{1,2}日|\d{4}年|\d{1,2}月|\d{1,2}[/-]\d{1,2}|Q[1-4]|第\d+[期章]|春|夏|秋|冬)(\s|[:：]|$)/i.test(plain(value))
 }
 
 function validatePlan(nodes, slides) {
@@ -222,22 +222,22 @@ function viewSlide(slide, index, total, imageSources) {
     total,
     label: plain(slide.title?.text || `スライド ${index + 1}`),
     title: slide.title && viewNode(slide.title, imageSources),
-    body: slide.body.map(node => viewNode(node, imageSources, slide.layout === 'references')),
+    body: slide.body.map(node => viewNode(node, imageSources)),
   }
 }
 
-function viewNode(node, imageSources, showLinkUrls = false) {
-  if (node.type === 'heading' || node.type === 'paragraph') return { ...node, html: kumi(node.text, { showLinkUrls }) }
+function viewNode(node, imageSources) {
+  if (node.type === 'heading' || node.type === 'paragraph') return { ...node, html: kumi(node.text) }
   if (node.type === 'list') return { ...node, items: node.items.map(item => {
-    const timeline = item.text.match(/^(.+?)([:：]\s*)(.+)$/)
+    const timeline = item.text.match(/^([^:[\]]+?)([:：]\s*)(.+)$/)
     return {
       ...item,
-      html: kumi(item.text, { showLinkUrls }),
+      html: kumi(item.text),
       labelHtml: inline(timeline ? timeline[1] + timeline[2] : ''),
       detailHtml: kumi(timeline ? timeline[3] : item.text),
     }
   }) }
-  if (node.type === 'table') return { ...node, headerHtml: node.header.map(value => kumi(value, { showLinkUrls })), rowsHtml: node.rows.map(row => row.map(value => kumi(value, { showLinkUrls }))) }
+  if (node.type === 'table') return { ...node, headerHtml: node.header.map(value => kumi(value)), rowsHtml: node.rows.map(row => row.map(value => kumi(value))) }
   if (node.type === 'image') return { ...node, src: imageSources?.get(node.url) || safeUrl(node.url, true), captionHtml: kumi(node.title || node.alt) }
   if (node.type === 'quote') return { ...node, html: kumi(node.value).replace(/\n/g, '<br>') }
   return node
@@ -248,21 +248,26 @@ function numberFrom(value) {
   return Number.isFinite(number) ? number : NaN
 }
 
-function inline(value = '', options = {}) {
+function inline(value = '') {
   let text = escapeHtml(value)
-  text = text.replace(/`([^`]+)`/g, '<code>$1</code>')
+  const codeSpans = []
+  text = text.replace(/`([^`]+)`/g, (_, code) => {
+    codeSpans.push(code)
+    return `\u0000code${codeSpans.length - 1}\u0000`
+  })
   text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
   text = text.replace(/__([^_]+)__/g, '<strong>$1</strong>')
   text = text.replace(/\[([^\]]+)\]\(([^ )]+)(?:\s+["'][^"']*["'])?\)/g, (_, label, url) => {
     const decodedUrl = decodeEntities(url)
     const visibleUrl = escapeHtml(decodedUrl)
-    const suffix = options.showLinkUrls && decodeEntities(label) !== decodedUrl ? `<span class="reference-url">${visibleUrl}</span>` : ''
+    const isExternal = /^https?:\/\//i.test(decodedUrl)
+    const suffix = isExternal && decodeEntities(label) !== decodedUrl ? `<span class="reference-url">${visibleUrl}</span>` : ''
     return `<a href="${safeUrl(decodedUrl, false)}">${label}${suffix}</a>`
   })
-  return text
+  return text.replace(/\u0000code(\d+)\u0000/g, (_, index) => `<code>${codeSpans[index]}</code>`)
 }
 
-const kumi = (value, options) => japaneseParser.translateHTMLString(inline(value, options))
+const kumi = value => japaneseParser.translateHTMLString(inline(value)).replace(/(<span class="reference-url">)(.*?)(<\/span>)/g, (_, start, url, end) => `${start}${url.replace(/\u200b/g, '')}${end}`)
 
 function plain(value = '') {
   return value.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/[*_`~]/g, '').trim()
