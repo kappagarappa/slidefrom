@@ -408,21 +408,111 @@ function maskCodeSpans(value = '') {
   return value.replace(/`+[^`]*`+/g, match => ' '.repeat(match.length))
 }
 
-function externalLinks(value = '') {
-  const links = []
+function markdownLinkAt(value, masked, start) {
+  const labelEnd = masked.indexOf(']', start + 1)
+  if (labelEnd < 0 || masked[labelEnd + 1] !== '(') return null
+
+  let cursor = labelEnd + 2
+  while (/\s/.test(masked[cursor] || '')) cursor++
+  let urlStart = cursor
+  let urlEnd = cursor
+  if (masked[cursor] === '<') {
+    urlStart++
+    cursor = masked.indexOf('>', cursor + 1)
+    if (cursor < 0) return null
+    urlEnd = cursor
+    cursor++
+  } else {
+    let depth = 0
+    for (; cursor < masked.length; cursor++) {
+      const char = masked[cursor]
+      if (char === '\\' && cursor + 1 < masked.length) {
+        cursor++
+        continue
+      }
+      if (char === '(') {
+        depth++
+        continue
+      }
+      if (char === ')') {
+        if (!depth) break
+        depth--
+        continue
+      }
+      if (/\s/.test(char) && !depth) break
+    }
+    urlEnd = cursor
+  }
+
+  const url = value.slice(urlStart, urlEnd)
+  if (!url) return null
+  while (/\s/.test(masked[cursor] || '')) cursor++
+  if (masked[cursor] !== ')') {
+    const quote = masked[cursor]
+    if (quote !== '"' && quote !== "'") return null
+    cursor++
+    while (cursor < masked.length && masked[cursor] !== quote) {
+      if (masked[cursor] === '\\') cursor++
+      cursor++
+    }
+    if (masked[cursor] !== quote) return null
+    cursor++
+    while (/\s/.test(masked[cursor] || '')) cursor++
+  }
+  if (masked[cursor] !== ')') return null
+  return { start, end: cursor + 1, label: value.slice(start + 1, labelEnd), url }
+}
+
+function markdownLinks(value = '') {
   const masked = maskCodeSpans(value)
-  const pattern = /\[([^\]]+)\]\(([^ )]+)(?:\s+["'][^"']*["'])?\)/g
-  for (const match of masked.matchAll(pattern)) {
-    const url = decodeEntities(match[2])
-    if (/^https?:\/\//i.test(url)) links.push({ url, label: decodeEntities(match[1]) })
+  const links = []
+  for (let start = 0; start < masked.length; start++) {
+    if (masked[start] !== '[') continue
+    const link = markdownLinkAt(value, masked, start)
+    if (!link) continue
+    links.push(link)
+    start = link.end - 1
   }
   return links
 }
 
+function externalLinks(value = '') {
+  return markdownLinks(value)
+    .map(link => ({ url: decodeEntities(link.url), label: decodeEntities(link.label) }))
+    .filter(link => /^https?:\/\//i.test(link.url))
+}
+
 function externalUrls(value = '') {
-  return [...maskCodeSpans(value).matchAll(/https?:\/\/[^\s<>)"']+/gi)]
-    .map(match => decodeEntities(match[0]).replace(/[.,、。]+$/g, ''))
-    .filter(url => /^https?:\/\//i.test(url))
+  const masked = maskCodeSpans(value)
+  const urls = []
+  for (let start = 0; start < masked.length;) {
+    const match = masked.slice(start).match(/https?:\/\//i)
+    if (!match) break
+    const urlStart = start + match.index
+    let cursor = urlStart
+    let depth = 0
+    for (; cursor < masked.length; cursor++) {
+      const char = masked[cursor]
+      if (char === '\\' && cursor + 1 < masked.length) {
+        cursor++
+        continue
+      }
+      if (char === '(') {
+        depth++
+        continue
+      }
+      if (char === ')') {
+        if (!depth) break
+        depth--
+        continue
+      }
+      if (/[\s<>"']/.test(char)) break
+    }
+    const url = decodeEntities(value.slice(urlStart, cursor)).replace(/[.,、。]+$/g, '')
+    if (/^https?:\/\//i.test(url)) urls.push(url)
+    start = Math.max(cursor, urlStart + 1)
+  }
+  return urls
 }
 
 function sourceForItem(node, item) {
@@ -672,19 +762,26 @@ function numberFrom(value) {
 }
 
 function inline(value = '', options = {}) {
-  let text = escapeHtml(value)
   const codeSpans = []
-  text = text.replace(/`([^`]+)`/g, (_, code) => {
-    codeSpans.push(code)
+  let source = value.replace(/`([^`]+)`/g, (_, code) => {
+    codeSpans.push(escapeHtml(code))
     return `\u0000code${codeSpans.length - 1}\u0000`
   })
+  const links = markdownLinks(source)
+  for (let index = links.length - 1; index >= 0; index--) {
+    const link = links[index]
+    source = `${source.slice(0, link.start)}\u0000link${index}\u0000${source.slice(link.end)}`
+  }
+  let text = escapeHtml(source)
   text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
   text = text.replace(/__([^_]+)__/g, '<strong>$1</strong>')
-  text = text.replace(/\[([^\]]+)\]\(([^ )]+)(?:\s+["'][^"']*["'])?\)/g, (_, label, url) => {
-    const decodedUrl = decodeEntities(url)
+  text = text.replace(/\u0000link(\d+)\u0000/g, (_, index) => {
+    const link = links[Number(index)]
+    const decodedUrl = decodeEntities(link.url)
     const visibleUrl = escapeHtml(decodedUrl)
     const isExternal = /^https?:\/\//i.test(decodedUrl)
-    const suffix = options.showLinkUrls && isExternal && decodeEntities(label) !== decodedUrl ? `<span class="reference-url">${visibleUrl}</span>` : ''
+    const suffix = options.showLinkUrls && isExternal && decodeEntities(link.label) !== decodedUrl ? `<span class="reference-url">${visibleUrl}</span>` : ''
+    const label = escapeHtml(link.label).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/__([^_]+)__/g, '<strong>$1</strong>')
     return `<a href="${safeUrl(decodedUrl, false)}">${label}${suffix}</a>`
   })
   return text.replace(/\u0000code(\d+)\u0000/g, (_, index) => `<code>${codeSpans[index]}</code>`)
@@ -693,7 +790,14 @@ function inline(value = '', options = {}) {
 const kumi = (value, options = {}) => japaneseParser.translateHTMLString(inline(value, options)).replace(/(<span class="reference-url">)(.*?)(<\/span>)/g, (_, start, url, end) => `${start}${url.replace(/\u200b/g, '')}${end}`)
 
 function plain(value = '') {
-  return value.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/[*_`~]/g, '').trim()
+  let text = value
+  const links = markdownLinks(value)
+  for (let index = links.length - 1; index >= 0; index--) {
+    const link = links[index]
+    const start = link.start > 0 && value[link.start - 1] === '!' ? link.start - 1 : link.start
+    text = `${text.slice(0, start)}${link.label}${text.slice(link.end)}`
+  }
+  return text.replace(/[*_`~]/g, '').trim()
 }
 
 function safeUrl(value, imageUrl) {

@@ -289,6 +289,52 @@ test('本文の外部リンクを重複なく出典nodeへ変換しコードと�
   assert.match(references.find(reference => reference.url === 'https://body.example/one').labelHtml, /本文リンク/)
 })
 
+test('括弧付きURLを本文hrefと出典URLで完全に保持し既存出典と重複させない', () => {
+  const nestedUrl = 'https://en.wikipedia.org/wiki/Function_(mathematics)'
+  const regularUrl = 'https://example.com/normal'
+  const titledUrl = 'https://example.com/guide_(intro)'
+  const markdown = `# 表紙
+
+## 本文
+
+[Function](${nestedUrl})、[通常](${regularUrl})、[題名付き](${titledUrl} "資料")。
+
+\`[コード](${nestedUrl})\` と [危険](javascript:alert(1))。
+
+## 予定
+
+- 7月：[Function](${nestedUrl})
+
+# 出典
+
+## 参考
+
+- 手動出典 ${nestedUrl}
+- [手動リンク](${nestedUrl})`
+  const nodes = parseMarkdown(markdown)
+  const plannedSlides = planSlides(nodes)
+  const renderedSlides = [...renderDeck(nodes, plannedSlides).matchAll(/^slide: (.+)$/gm)].map(match => JSON.parse(match[1]))
+  const bodySlide = renderedSlides.find(slide => slide.label === '本文')
+  const timelineSlide = renderedSlides.find(slide => slide.label === '予定')
+  const htmlOf = slide => slide.body.flatMap(node => [
+    node.html,
+    ...(node.items || []).flatMap(item => [item.html, item.labelHtml, item.detailHtml]),
+    ...(node.stages || []).flatMap(stage => [stage.labelHtml, stage.detailHtml]),
+  ]).filter(Boolean).join('\n')
+  const bodyHtml = htmlOf(bodySlide)
+  const timelineHtml = htmlOf(timelineSlide)
+
+  assert.ok(bodyHtml.includes(`href="${nestedUrl}"`))
+  assert.ok(bodyHtml.includes(`href="${regularUrl}"`))
+  assert.ok(bodyHtml.includes(`href="${titledUrl}"`))
+  assert.ok(timelineHtml.includes(`href="${nestedUrl}"`))
+  assert.ok(bodyHtml.includes('<code>[コード]('))
+  assert.ok(bodyHtml.includes('href="#"'))
+
+  const references = plannedSlides.flatMap(slide => slide.body.filter(node => node.type === 'reference'))
+  assert.deepEqual(references.map(reference => reference.url).sort(), [regularUrl, titledUrl].sort())
+})
+
 test('既存の出典URLを重複させず無リンク原稿に余分なページを作らない', () => {
   const existing = parseMarkdown('# 表紙\n\n本文の[既存資料](https://already.example/source)\n\n# 出典\n\n## 参考\n\n- 既存の説明 https://already.example/source\n- [既存](https://already.example/source)')
   const existingSlides = planSlides(existing)
